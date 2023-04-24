@@ -1,5 +1,5 @@
 #pragma GCC optimize(2)
-#pragma comment(lib, "pthreadVC2.lib")
+//#pragma comment(lib, "pthreadVC2.lib")
 
 #include<iostream>
 #include<bits/stdc++.h>
@@ -213,7 +213,7 @@ int read() //读入
     //初始化
     sem_init(&L_available,0,1);
     //打开
-    freopen("retail.txt","r",stdin);
+    //freopen("retail.txt","r",stdin);
     Data_Num=0;
     while(1){
         int x=0;

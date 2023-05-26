@@ -1,117 +1,136 @@
 #pragma GCC optimize(2)
 //#pragma comment(lib, "pthreadVC2.lib")
 
-#include<iostream>
-#include<bits/stdc++.h>
-#include<pthread.h>
-#include<semaphore.h>
+#include <iostream>
+#include <bits/stdc++.h>
+#include <pthread.h>
+#include <semaphore.h>
 using namespace std;
-typedef pair<int,int> pii;
-typedef pair<int,pii> piii;
-const int NUM=9e4;
+typedef pair<int, int> pii;
+typedef pair<int, pii> piii;
+const int NUM = 88162 + 1024;
 
-int Data_Max=0; //æ•°æ®ä¸­çš„æœ€å¤§å€¼
-vector<int> Data[NUM];//æ•°æ®
-int Data_Num;   //æ•°æ®çš„æ•°é‡
-bitset<NUM> data_bitset[500]; 
+int Data_Max = 0;      // Êı¾İÖĞµÄ×î´óÖµ
+vector<int> Data[NUM]; // Êı¾İ
+int Data_Num;          // Êı¾İµÄÊıÁ¿
+bitset<NUM> data_bitset[10000];
 
-int data_index[NUM];//æ˜¯ä¸æ˜¯L1
-int data_count[NUM]; //æ¯ä¸ªæ•°é‡
-int Support_Min; //>= è¦æ»¡è¶³çš„æœ€å°æ•°é‡
+int data_index[NUM];      // ÊÇ²»ÊÇL1
+vector<int> Data_L1[NUM]; // Êı¾İ
+int data_index_L2[NUM];   // L2Êı¾İ¼¯
+int data_count[NUM];      // Ã¿¸öÊıÁ¿
+int Support_Min;          //>= ÒªÂú×ãµÄ×îĞ¡ÊıÁ¿
 
-
-class node{
-  public:
-    //æ•°æ®
+class node
+{
+public:
+    // Êı¾İ
     vector<int> itemsets;
     int support_num;
-    const long long base=1e9+7;
-    //æ‰“å°
-    void print(){
-        for(int i=0;i<itemsets.size();i++)cout<<itemsets[i]<<" "; cout<<":"<<support_num;
-        cout<<endl;
+    const long long base = 1e9 + 7;
+    // ´òÓ¡
+    void print()
+    {
+        for (int i = 0; i < itemsets.size(); i++)
+            cout << itemsets[i] << " ";
+        cout << ":" << support_num;
+        cout << endl;
     }
-    //å“ˆå¸Œ
+    // ¹şÏ£
     vector<unsigned long long> ba;
     vector<unsigned long long> inc;
-    int ba_flag=0;
-    void prework(){
-        if(ba_flag==1)return ;
+    int ba_flag = 0;
+    void prework()
+    {
+        if (ba_flag == 1)
+            return;
         ba.push_back(1);
         inc.push_back(0);
-        for(int i=1;i<=itemsets.size();i++){
-            ba.push_back(ba[ba.size()-1]*base);
-            inc.push_back(inc[inc.size()-1]*base+itemsets[i-1]);
+        for (int i = 1; i <= itemsets.size(); i++)
+        {
+            ba.push_back(ba[ba.size() - 1] * base);
+            inc.push_back(inc[inc.size() - 1] * base + itemsets[i - 1]);
         }
-        ba_flag=1;
+        ba_flag = 1;
     }
-    inline unsigned long long get(long long l,long long r){
-        return inc[r]-inc[l-1]*ba[r-l+1];
+    inline unsigned long long get(long long l, long long r)
+    {
+        return inc[r] - inc[l - 1] * ba[r - l + 1];
     }
-    inline unsigned long long remove(long long p){
-        return inc[p-1]*ba[itemsets.size()-p]+get(p+1,itemsets.size());
+    inline unsigned long long remove(long long p)
+    {
+        return inc[p - 1] * ba[itemsets.size() - p] + get(p + 1, itemsets.size());
     }
 };
 
-vector<node> C[10];
-vector<node> L[10];
-bitset<NUM> L_bitset[2][500];
-unordered_map<unsigned long long,vector<int>> L_create_C_map;
-unordered_map<unsigned long long,int> L_hash_map;
+vector<node> C[20];
+vector<node> L[20];
+bitset<NUM> L_bitset[2][10000];
+unordered_map<unsigned long long, vector<int>> L_create_C_map;
+unordered_map<unsigned long long, int> L_hash_map;
 
-//çº¿ç¨‹
-sem_t L_available;  //ç”¨äºäº’æ–¥L
-pii thread_create_L1[20];  //ç”Ÿæˆ1l
-piii thread_L_available[20]; //creat_L
+// Ïß³Ì
+sem_t L_available;           // ÓÃÓÚ»¥³âL
+pii thread_create_L1[20];    // Éú³É1l
+piii thread_L_available[20]; // creat_L
 
-int create_C(int k){ //æœ‰L[k] ç”Ÿæˆ C[k+1]  å¤æ‚åº¦O(KM)  kï¼šé¢‘ç¹é›†æ•°é‡ mï¼šæ•°æ®å¹³å‡é•¿åº¦
-    //åˆå§‹åŒ–
+int create_C(int k)
+{ // ÓĞL[k] Éú³É C[k+1]  ¸´ÔÓ¶ÈO(KM)  k£ºÆµ·±¼¯ÊıÁ¿ m£ºÊı¾İÆ½¾ù³¤¶È
+    // ³õÊ¼»¯
     L_create_C_map.clear();
     L_hash_map.clear();
-    //å¤„ç† L[k]æ•°ç»„ ç”Ÿæˆhash
-    for(int i=0;i<L[k].size();i++){
+    // ´¦Àí L[k]Êı×é Éú³Éhash
+    for (int i = 0; i < L[k].size(); i++)
+    {
         L[k][i].prework();
-        unsigned long long a=L[k][i].get(1,L[k][i].itemsets.size()-1);
-        unsigned long long L_hash=L[k][i].get(1,L[k][i].itemsets.size());
-        auto it=L_create_C_map.find(a);
-        L_hash_map.insert({L_hash,i});
-        if(it!=L_create_C_map.end())it->second.push_back(i);
-        else {
-            //æ‰€æœ‰å»é™¤æœ€åä¸€ä¸ªå­—ç¬¦ç›¸ç­‰çš„hash
-            vector<int> b={i};
-            L_create_C_map.insert({a,b});
+        unsigned long long a = L[k][i].get(1, L[k][i].itemsets.size() - 1);
+        unsigned long long L_hash = L[k][i].get(1, L[k][i].itemsets.size());
+        auto it = L_create_C_map.find(a);
+        L_hash_map.insert({L_hash, i});
+        if (it != L_create_C_map.end())
+            it->second.push_back(i);
+        else
+        {
+            // ËùÓĞÈ¥³ı×îºóÒ»¸ö×Ö·ûÏàµÈµÄhash
+            vector<int> b = {i};
+            L_create_C_map.insert({a, b});
         }
     }
-    //ä»Lç”ŸæˆC
-    for(auto it=L_create_C_map.begin();it!=L_create_C_map.end();it++){
-        //æ¯ä¸ªç›¸ç­‰çš„hash
-        vector<int>&L_same_hash =it->second; 
-        vector<int> itemset_prior =L[k][L_same_hash[0]].itemsets; 
+    // ´ÓLÉú³ÉC
+    for (auto it = L_create_C_map.begin(); it != L_create_C_map.end(); it++)
+    {
+        // Ã¿¸öÏàµÈµÄhash
+        vector<int> &L_same_hash = it->second;
+        vector<int> itemset_prior = L[k][L_same_hash[0]].itemsets;
         itemset_prior.pop_back();
-        //æ¯ä¸ªç›¸ç­‰çš„hash ä¸¤ä¸¤ç»„æˆ
-        for(int i=0;i<L_same_hash.size();i++){       //ç”ŸæˆC
-            for(int j=i+1;j<L_same_hash.size();j++){   
-                //å…ˆåä¸¤ä¸ª
-                vector<int>&first=L[k][L_same_hash[i]].itemsets;
-                vector<int>&second=L[k][L_same_hash[j]].itemsets;
-                //ç”ŸæˆCèŠ‚ç‚¹
+        // Ã¿¸öÏàµÈµÄhash Á½Á½×é³É
+        for (int i = 0; i < L_same_hash.size(); i++)
+        { // Éú³ÉC
+            for (int j = i + 1; j < L_same_hash.size(); j++)
+            {
+                // ÏÈºóÁ½¸ö
+                vector<int> &first = L[k][L_same_hash[i]].itemsets;
+                vector<int> &second = L[k][L_same_hash[j]].itemsets;
+                // Éú³ÉC½Úµã
                 node C_next;
-                C_next.itemsets=itemset_prior;
-                C_next.support_num=0;   
-                C_next.itemsets.push_back(min(first[first.size()-1],second[second.size()-1]));
-                C_next.itemsets.push_back(max(first[first.size()-1],second[second.size()-1]));
-                C[k+1].push_back(C_next);
-                //æ£€æµ‹CèŠ‚ç‚¹æ˜¯å¦å¯èƒ½
-                auto&it=C[k+1][C[k+1].size()-1];
+                C_next.itemsets = itemset_prior;
+                C_next.support_num = 0;
+                C_next.itemsets.push_back(min(first[first.size() - 1], second[second.size() - 1]));
+                C_next.itemsets.push_back(max(first[first.size() - 1], second[second.size() - 1]));
+                C[k + 1].push_back(C_next);
+                // ¼ì²âC½ÚµãÊÇ·ñ¿ÉÄÜ
+                auto &it = C[k + 1][C[k + 1].size() - 1];
                 it.prework();
-                    //éå†æ¯ç§å¯èƒ½
-                for(int i=0;i<it.itemsets.size()-1;i++){ 
-                        auto a=it.remove(i+1);
-                        if(L_hash_map.find(a)==L_hash_map.end()){
-                            //å–å‡º
-                            C[k+1].pop_back();
-                            break;
-                        }
+                // ±éÀúÃ¿ÖÖ¿ÉÄÜ
+                for (int i = 0; i < it.itemsets.size() - 1; i++)
+                {
+                    auto a = it.remove(i + 1);
+                    if (L_hash_map.find(a) == L_hash_map.end())
+                    {
+                        // È¡³ö
+                        C[k + 1].pop_back();
+                        break;
+                    }
                 }
             }
         }
@@ -119,194 +138,284 @@ int create_C(int k){ //æœ‰L[k] ç”Ÿæˆ C[k+1]  å¤æ‚åº¦O(KM)  kï¼šé¢‘ç¹é›†æ•°é‡
     return 0;
 }
 
-int check_data(node &p,int k,int num){  //check_data->thread_work->create_L
-    //æ‰¾åˆ°size-1 å’Œ item[size]çš„å€¼ 
-    int itemset_size=p.itemsets.size()-1;
+int check_data(node &p, int k, int num)
+{ // check_data->thread_work->create_L
+    // ÕÒµ½size-1 ºÍ item[size]µÄÖµ
+    int itemset_size = p.itemsets.size() - 1;
     p.prework();
-    
-    auto a=p.get(1,itemset_size);
-    auto b=p.itemsets[itemset_size];
-    auto it=L_hash_map[a];
-    auto is=data_index[b];
 
-    //ç”¨bitsetæ¥è®¡ç®—
+    auto a = p.get(1, itemset_size);
+    auto b = p.itemsets[itemset_size];
+    auto it = L_hash_map[a];
+    auto is = data_index[b];
+
+    // ÓÃbitsetÀ´¼ÆËã
     bitset<NUM> L_bitset_tool;
-    if(k==2)L_bitset_tool=data_bitset[it]&data_bitset[is];
-    else  L_bitset_tool=L_bitset[(k+1)%2][it]&data_bitset[is];
-    //æ•°é‡
-    int to1=L_bitset_tool.count();
+    if (k == 2)
+        L_bitset_tool = data_bitset[it] & data_bitset[is];
+    else
+        L_bitset_tool = L_bitset[(k + 1) % 2][it] & data_bitset[is];
+    // ÊıÁ¿
+    int to1 = L_bitset_tool.count();
 
-     C[k][num].support_num=to1;
-     //å¤§äºæœ€å°æ”¯æŒåº¦
-        if(to1>=Support_Min){
-            //äº’æ–¥è®¿é—®ç¡®ä¿æ­£å¸¸
-            sem_wait(&L_available);
-            int p_num=L[k].size();
-            L[k].push_back(C[k][num]);
-            sem_post(&L_available);
-            //åˆ‡æ¢
-            L_bitset[k%2][p_num]=L_bitset_tool;
-        }
+    C[k][num].support_num = to1;
+    // ´óÓÚ×îĞ¡Ö§³Ö¶È
+    if (to1 >= Support_Min)
+    {
+        // »¥³â·ÃÎÊÈ·±£Õı³£
+        sem_wait(&L_available);
+        int p_num = L[k].size();
+        L[k].push_back(C[k][num]);
+        sem_post(&L_available);
+        // ÇĞ»»
+        L_bitset[k % 2][p_num] = L_bitset_tool;
+    }
     return to1;
 }
 
-void* thread_work(void* rank){    //check_data->thread_work->create_L
-    //ä¼ å‚
-    piii kl  =*(piii*)rank;
-    int k=kl.first,i=kl.second.first,thread_num=kl.second.second;
+void *thread_work(void *rank)
+{ // check_data->thread_work->create_L
+    // ´«²Î
+    piii kl = *(piii *)rank;
+    int k = kl.first, i = kl.second.first, thread_num = kl.second.second;
     while (1)
-    {   
-        //ç»“æŸæ¡ä»¶
-        if(i>=C[k].size())return NULL;
-        check_data(C[k][i],k,i);
-        i+=thread_num;
+    {
+        // ½áÊøÌõ¼ş
+        if (i >= C[k].size())
+            return NULL;
+        check_data(C[k][i], k, i);
+        i += thread_num;
     }
 
     return NULL;
 }
 
-
-int create_L(int k){ //ç”±C[k] ç”ŸæˆL[k]  å¤æ‚åº¦O(KN/32) kï¼šé¢‘ç¹é›†æ•°é‡ Nï¼šæ•°æ®çš„æ•°é‡
-    if(C[k].size()==0)return 0;
-    //çº¿ç¨‹æ•°é‡
+int create_L(int k)
+{
+    // ÓÉC[k] Éú³ÉL[k]  ¸´ÔÓ¶ÈO(KN/32) k£ºÆµ·±¼¯ÊıÁ¿ N£ºÊı¾İµÄÊıÁ¿
+    if (C[k].size() == 0)
+        return 0;
+    // Ïß³ÌÊıÁ¿
     pthread_t thread[20];
-    int thread_num=8;
-    if(C[k].size()<100)thread_num=1;
+    int thread_num = 8;
+    if (C[k].size() < 100)
+        thread_num = 1;
 
-    //çº¿ç¨‹æ‰§è¡Œ
-    for(int i=0;i<thread_num;i++){
-        thread_L_available[i]={k,{i,thread_num}};
-        pthread_create(&thread[i],NULL,thread_work,(void*)&thread_L_available[i]);
+    // Ïß³ÌÖ´ĞĞ
+    for (int i = 0; i < thread_num; i++)
+    {
+        thread_L_available[i] = {k, {i, thread_num}};
+        pthread_create(&thread[i], NULL, thread_work, (void *)&thread_L_available[i]);
     }
-    for(int i=0;i<thread_num;i++)
-        pthread_join(thread[i],NULL);
+    for (int i = 0; i < thread_num; i++)
+        pthread_join(thread[i], NULL);
 
     return 0;
 }
 
-void* thread_production_C1(void* rank){  //C[1]çš„å‡½æ•°
-    //ä¼ å‚
-    pii kl=*(pii*)rank;
-    int bit_num=64; //æ¯æ¬¡å¤„ç†64ä½
-    int k=kl.first*bit_num,thread_num=kl.second*bit_num;
+void *thread_production_C1(void *rank)
+{ // C[1]µÄº¯Êı
+    // ´«²Î
+    pii kl = *(pii *)rank;
+    int bit_num = 64; // Ã¿´Î´¦Àí64Î»
+    int k = kl.first * bit_num, thread_num = kl.second * bit_num;
     while (1)
-    {   
-        for(int i=0;i<bit_num;i++){
-            int index=k+i;
-            if(index>=Data_Num)break;
-            //åˆ¤æ–­
-            for(int j=0;j<Data[index].size();j++){
-                int it=data_index[Data[index][j]];
-                if(it>=0){
-                    data_bitset[it][index]=1;
-                } 
+    {
+        for (int i = 0; i < bit_num; i++)
+        {
+            int index = k + i;
+            if (index >= Data_Num)
+                break;
+            // ÅĞ¶Ï
+            for (int j = 0; j < Data[index].size(); j++)
+            {
+                int it = data_index[Data[index][j]];
+                if (it >= 0)
+                {
+                    Data_L1[index].push_back(Data[index][j]);
+                    data_bitset[it][index] = 1;
+                }
             }
         }
-        k+=thread_num;
-        if(k>=Data_Num)break;
+        k += thread_num;
+        if (k >= Data_Num)
+            break;
     }
     return NULL;
 }
 
-int read() //è¯»å…¥
+void *thread_production_L2(void *rank)
 {
-    //åˆå§‹åŒ–
-    sem_init(&L_available,0,1);
-    //æ‰“å¼€
-    //freopen("retail.txt","r",stdin);
-    Data_Num=0;
-    while(1){
-        int x=0;
-        char ch=getchar();
+    pii kl = *(pii *)rank;
+    int k = kl.first, thread_num = kl.second;
 
-        while(ch!=EOF&&ch<'0'||ch>'9')
+    while (1)
+    {
+        int p1 = L[2][k].itemsets[0];
+        int p2 = L[2][k].itemsets[1];
+        L_bitset[2 % 2][k] = data_bitset[data_index[p1]] & data_bitset[data_index[p2]];
+        k += thread_num;
+        if (k >= L[2].size())
+            break;
+    }
+
+    return NULL;
+}
+
+int read() // ¶ÁÈë
+{
+    // ³õÊ¼»¯
+    sem_init(&L_available, 0, 1);
+    // ´ò¿ª
+    freopen("retail.dat", "r", stdin);
+    Data_Num = 0;
+    while (1)
+    {
+        int x = 0;
+        char ch = getchar();
+
+        while (ch != EOF && ch < '0' || ch > '9')
         {
-            if(ch=='\n')Data_Num++;
-            ch=getchar();
+            if (ch == '\n')
+                Data_Num++;
+            ch = getchar();
         }
-        if(ch==EOF)break;
-        while(ch>='0' && ch<='9'){
-            x = (x << 3) + (x << 1) + ch - '0',ch=getchar();
+        if (ch == EOF)
+            break;
+        while (ch >= '0' && ch <= '9')
+        {
+            x = (x << 3) + (x << 1) + ch - '0', ch = getchar();
         }
         Data[Data_Num].push_back(x);
-        Data_Max=max(x,Data_Max);
+        Data_Max = max(x, Data_Max);
         data_count[x]++;
-        data_index[x]=-1;
+        data_index[x] = -1;
 
-        if(ch=='\n')Data_Num++;
-            else if(ch==EOF)break;
+        if (ch == '\n')
+            Data_Num++;
+        else if (ch == EOF)
+            break;
     }
     Data_Num++;
 
-    //è¾“å‡ºæ•°é‡
-    printf("\næ•°æ®æ•°é‡:%d  æ•°æ®æœ€å¤§å€¼:%d\n",Data_Num,Data_Max);
-   return 0;
-} 
+    // Êä³öÊıÁ¿
+    printf("\nÊı¾İÊıÁ¿:%d  Êı¾İ×î´óÖµ:%d\n", Data_Num, Data_Max);
+    return 0;
+}
 
-void solve(){ //å¤„ç†å‡½æ•°
-    //ç”ŸæˆC1
-   for(int i=0;i<Data_Max;i++){   
-        if(data_count[i]<Support_Min)continue;
+void solve()
+{ // ´¦Àíº¯Êı
+    // Éú³ÉL1
+    for (int i = 0; i <= Data_Max; i++)
+    {
+        if (data_count[i] < Support_Min)
+            continue;
         node a;
         a.itemsets.push_back(i);
-        a.support_num=data_count[i];
-        data_index[i]=L[1].size();
+        a.support_num = data_count[i];
+        data_index[i] = L[1].size();
         L[1].push_back(a);
     }
 
-    //ç”ŸæˆL1
+    // Éú³Ébitset
     pthread_t thread[10];
-    int thread_num=8;
-    for(int i=0;i<thread_num;i++){   
-        thread_create_L1[i]={i,thread_num};
-        pthread_create(&thread[i],NULL,thread_production_C1,(void*)&thread_create_L1[i]);
+    int thread_num = 8;
+    for (int i = 0; i < thread_num; i++)
+    {
+        thread_create_L1[i] = {i, thread_num};
+        pthread_create(&thread[i], NULL, thread_production_C1, (void *)&thread_create_L1[i]);
     }
-    for(int i=0;i<thread_num;i++)
-        pthread_join(thread[i],NULL);
+    for (int i = 0; i < thread_num; i++)
+        pthread_join(thread[i], NULL);
 
-    //è¾“å‡º
-    int date_sum_num=0;
-     date_sum_num+=L[1].size();
-     printf("1L:%d\n",L[1].size());
-    for(int k=2;;k++){
-        create_C(k-1);
+    map<long long, long long> tool;
+    for (int i = 0; i < Data_Num; i++)
+    {
+        for (int j = 0; j < Data_L1[i].size(); j++)
+        {
+            for (int k = j + 1; k < Data_L1[i].size(); k++)
+            {
+                long long a = Data_L1[i][j] * NUM + Data_L1[i][k];
+                tool[a]++;
+            }
+        }
+    }
+    for (auto it = tool.begin(); it != tool.end(); it++)
+    {
+        if (it->second >= Support_Min)
+        {
+            vector<int> a;
+            int p1 = it->first / NUM, p2 = it->first % NUM;
+            a.push_back(it->first / NUM);
+            a.push_back(it->first % NUM);
+            node b;
+            b.itemsets = a;
+            b.support_num = it->second;
+            L[2].push_back(b);
+        }
+    }
+
+    thread_num = 2;
+    for (int i = 0; i < thread_num; i++)
+    {
+        thread_create_L1[i] = {i, thread_num};
+        pthread_create(&thread[i], NULL, thread_production_L2, (void *)&thread_create_L1[i]);
+    }
+    for (int i = 0; i < thread_num; i++)
+        pthread_join(thread[i], NULL);
+
+    // ´¦Àí
+    for (int k = 3;; k++)
+    {
+        create_C(k - 1);
         create_L(k);
-        printf("%dL:%d\n",k,L[k].size());
-        date_sum_num+=L[k].size();
-        if(L[k].size()==0)break;
+        if (L[k].size() == 0)
+            break;
     }
-    printf("æ€»æ•°é‡:%d\n",date_sum_num);
 
+    // Êä³ö
+    int date_sum_num = 0;
+    date_sum_num += L[1].size();
+
+    printf("1L:%d\n", L[1].size());
+    printf("2L:%d\n", L[2].size());
+    for (int k = 2;; k++)
+    {
+        if (L[k].size() == 0)
+            break;
+        printf("KL:%d\n", L[k].size());
+        date_sum_num += L[k].size();
+    }
+    printf("×ÜÊıÁ¿:%d\n", date_sum_num);
 }
 
-
-int main(){
-    double percent=1;
-    cout<<"è¾“å…¥ç™¾åˆ†æ¯”:";
-    //cout<<percent<<"%\n";
-   // cin>>percent;
+int main()
+{
+    double percent = 0.1;
+    cout << "ÊäÈë°Ù·Ö±È:";
+    // cout<<percent<<"%\n";
+    // cin>>percent;
 
     auto begin = std::chrono::high_resolution_clock::now();
 
-    //è¯»å…¥
+    // ¶ÁÈë
     read();
     auto end = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
 
     printf("Input Time measured: %.3f seconds.\n", elapsed.count() * 1e-9);
 
-    Support_Min=ceil(percent*Data_Num/100);
-    cout<<"æœ€å°æ•°é‡"<<Support_Min<<endl;
-    
-    //å¤„ç†
+    Support_Min = ceil(percent * Data_Num / 100);
+    cout << "×îĞ¡ÊıÁ¿" << Support_Min << endl;
+
+    // ´¦Àí
     solve();
 
-    auto end_solve= std::chrono::high_resolution_clock::now();
+    auto end_solve = std::chrono::high_resolution_clock::now();
     auto elapsed_solve = std::chrono::duration_cast<std::chrono::nanoseconds>(end_solve - end);
-    
+
     printf("Solve Time measured: %.3f seconds.\n", elapsed_solve.count() * 1e-9);
-    printf("Process Time measured: %.3f seconds.\n", (elapsed_solve.count()+elapsed.count()) * 1e-9);
-    
-    
+    printf("Process Time measured: %.3f seconds.\n", (elapsed_solve.count() + elapsed.count()) * 1e-9);
+
     return 0;
 }
